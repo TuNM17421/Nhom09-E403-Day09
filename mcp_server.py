@@ -134,18 +134,46 @@ TOOL_SCHEMAS = {
 
 def tool_search_kb(query: str, top_k: int = 3) -> dict:
     """
-    Tìm kiếm Knowledge Base bằng semantic search.
-
-    TODO Sprint 3: Kết nối với ChromaDB thực.
-    Hiện tại: Delegate sang retrieval worker.
+    Tìm kiếm Knowledge Base bằng semantic search kết nối trực tiếp với ChromaDB.
     """
     try:
-        # Tái dùng retrieval logic từ workers/retrieval.py
         import sys
-        sys.path.insert(0, os.path.dirname(__file__))
-        from workers.retrieval import retrieve_dense
-        chunks = retrieve_dense(query, top_k=top_k)
+        import chromadb
+        if os.path.dirname(__file__) not in sys.path:
+            sys.path.insert(0, os.path.dirname(__file__))
+            
+        # Lấy embedding function của worker từ thành viên khác đã viết
+        from workers.retrieval import _get_embedding_fn
+        embed_fn = _get_embedding_fn()
+        query_embedding = embed_fn(query)
+        
+        # Kết nối đến ChromaDB và collection day09_docs
+        client = chromadb.PersistentClient(path="./chroma_db")
+        collection = client.get_collection("day09_docs")
+        
+        # Truy vấn Chromadb
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+            include=["documents", "distances", "metadatas"]
+        )
+        
+        chunks = []
+        if results and "documents" in results and results["documents"]:
+            for i, (doc, dist, meta) in enumerate(zip(
+                results["documents"][0],
+                results["distances"][0],
+                results["metadatas"][0]
+            )):
+                chunks.append({
+                    "text": doc,
+                    "source": meta.get("source", "unknown") if meta else "unknown",
+                    "score": round(1 - dist, 4),
+                    "metadata": meta or {},
+                })
+                
         sources = list({c["source"] for c in chunks})
+        
         return {
             "chunks": chunks,
             "sources": sources,
