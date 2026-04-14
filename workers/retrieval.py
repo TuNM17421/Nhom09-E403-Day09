@@ -28,26 +28,49 @@ load_dotenv()
 # ─────────────────────────────────────────────
 
 WORKER_NAME = "retrieval_worker"
-DEFAULT_TOP_K = 3
+DEFAULT_TOP_K = 5
 
+
+_cached_embed_fn = None
 
 def _get_embedding_fn():
     """
-    Trả về embedding function sử dụng OpenAI.
+    Trả về embedding function (cached để tránh load model mỗi query).
+    Ưu tiên SentenceTransformer (khớp với index đã build), fallback sang OpenAI.
     """
+    global _cached_embed_fn
+    if _cached_embed_fn is not None:
+        return _cached_embed_fn
+
+    # Option A: SentenceTransformer (khớp với build_index.py — all-MiniLM-L6-v2, 384d)
+    try:
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        def embed(text: str) -> list:
+            return model.encode(text).tolist()
+        _cached_embed_fn = embed
+        return embed
+    except ImportError:
+        pass
+
+    # Option B: OpenAI (chỉ dùng nếu index cũng build bằng OpenAI)
     try:
         from openai import OpenAI
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         def embed(text: str) -> list:
             resp = client.embeddings.create(input=text, model="text-embedding-3-small")
             return resp.data[0].embedding
+        _cached_embed_fn = embed
         return embed
     except ImportError:
-        print("⚠️  WARNING: Using fallback embeddings due to missing openai package.")
-        import random
-        def embed(text: str) -> list:
-            return [random.random() for _ in range(1536)]
-        return embed
+        pass
+
+    print("⚠️  WARNING: No embedding model available.")
+    import random
+    def embed(text: str) -> list:
+        return [random.random() for _ in range(384)]
+    _cached_embed_fn = embed
+    return embed
 
 
 def _get_collection():

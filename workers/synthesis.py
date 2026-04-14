@@ -80,10 +80,19 @@ def _build_context(chunks: list, policy_result: dict) -> str:
             score = chunk.get("score", 0)
             parts.append(f"[{i}] Nguồn: {source} (relevance: {score:.2f})\n{text}")
 
-    if policy_result and policy_result.get("exceptions_found"):
-        parts.append("\n=== POLICY EXCEPTIONS ===")
-        for ex in policy_result["exceptions_found"]:
-            parts.append(f"- {ex.get('rule', '')}")
+    if policy_result and (policy_result.get("exceptions_found") or policy_result.get("policy_version_note") or policy_result.get("explanation")):
+        parts.append("\n=== KẾT QUẢ PHÂN TÍCH POLICY ===")
+        if "policy_applies" in policy_result:
+            applies = policy_result["policy_applies"]
+            parts.append(f"Kết luận policy: {'Được chấp nhận' if applies else 'KHÔNG được chấp nhận / Không xác định'}")
+        if policy_result.get("policy_version_note"):
+            parts.append(f"Lưu ý version: {policy_result['policy_version_note']}")
+        if policy_result.get("explanation"):
+            parts.append(f"Giải thích: {policy_result['explanation']}")
+        if policy_result.get("exceptions_found"):
+            parts.append("Ngoại lệ phát hiện:")
+            for ex in policy_result["exceptions_found"]:
+                parts.append(f"- [{ex.get('type', '')}] {ex.get('rule', '')}")
 
     if not parts:
         return "(Không có context)"

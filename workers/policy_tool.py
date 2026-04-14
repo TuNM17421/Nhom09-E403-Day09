@@ -87,20 +87,28 @@ def analyze_policy(task: str, chunks: list) -> dict:
     system_prompt = """
     Bạn là một chuyên gia phân tích chính sách (Policy Analyst).
     Nhiệm vụ: Dựa vào context (là các tài liệu nội bộ), hãy xác định xem yêu cầu của người dùng có được chấp nhận theo chính sách không, và chỉ ra các ngoại lệ (exceptions) nếu có.
-    Trường hợp sản phẩm kỹ thuật số, Flash Sale, phần mềm đã kích hoạt thì thường không được hoàn tiền. Nếu đơn hàng trước 01/02/2026 áp dụng chính sách v3 (nếu không rõ trong docs cứ note lại).
-    
+
+    QUY TẮC QUAN TRỌNG:
+    1. Sản phẩm kỹ thuật số (license key, subscription), Flash Sale, phần mềm đã kích hoạt → KHÔNG được hoàn tiền.
+    2. TEMPORAL SCOPING — RẤT QUAN TRỌNG: Chính sách hoàn tiền v4 có hiệu lực từ ngày 01/02/2026.
+       - Đơn hàng đặt TRƯỚC 01/02/2026 (ví dụ: 31/01/2026, 30/01/2026) → áp dụng chính sách v3, KHÔNG áp dụng v4.
+       - Đơn hàng đặt TỪ 01/02/2026 trở đi → áp dụng v4.
+       - Hãy SO SÁNH NGÀY cẩn thận: 31/01/2026 là TRƯỚC 01/02/2026.
+       - Nếu đơn hàng thuộc v3 nhưng tài liệu hiện tại chỉ có v4 → ghi rõ "cần xác nhận chính sách v3".
+    3. CHỈ dựa vào context được cung cấp. KHÔNG bịa thông tin.
+
     Phản hồi BẮT BUỘC theo định dạng JSON với các khóa sau:
     {
-      "policy_applies": boolean (True nếu được phép, False nếu bị chặn),
+      "policy_applies": boolean (True nếu được phép, False nếu bị chặn hoặc không xác định),
       "policy_name": "tên chính sách áp dụng (vd: refund_policy_v4)",
       "exceptions_found": [
          {
-            "type": "loại ngoại lệ (vd: flash_sale_exception, digital_product_exception)",
+            "type": "loại ngoại lệ (vd: flash_sale_exception, digital_product_exception, temporal_scoping)",
             "rule": "câu giải thích luật cụ thể",
             "source": "tên file nguồn"
          }
       ],
-      "policy_version_note": "ghi chú về version nếu cần",
+      "policy_version_note": "ghi chú về version nếu cần (ví dụ: đơn trước 01/02/2026 áp dụng v3)",
       "explanation": "bước suy luận ngắn gọn"
     }
     """
@@ -191,6 +199,11 @@ def run(state: dict) -> dict:
             if mcp_result.get("output") and mcp_result["output"].get("chunks"):
                 chunks = mcp_result["output"]["chunks"]
                 state["retrieved_chunks"] = chunks
+                # Cập nhật retrieved_sources từ MCP result
+                mcp_sources = mcp_result["output"].get("sources", [])
+                if not mcp_sources:
+                    mcp_sources = list({c.get("source", "unknown") for c in chunks})
+                state["retrieved_sources"] = mcp_sources
 
         # Step 2: Phân tích policy
         policy_result = analyze_policy(task, chunks)
