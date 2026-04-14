@@ -11,12 +11,12 @@
 
 | Metric | Day 08 (Single Agent) | Day 09 (Multi-Agent) | Delta | Ghi chú |
 |--------|----------------------|---------------------|-------|---------|
-| Avg confidence | N/A | 0.501 | N/A | |
-| Avg latency (ms) | N/A | 6020 | N/A | |
-| Abstain rate (%) | N/A | 6.7 | N/A | q09 là case abstain |
-| Multi-hop accuracy | N/A | 100.0 | N/A | proxy theo expected source hit |
+| Avg confidence | 0.513 | 0.501 | -0.012 | |
+| Avg latency (ms) | 2233.0 | 6020 | 3787.0 | |
+| Abstain rate (%) | {'count': 2, 'total': 20, 'pct': 10.0, 'display': '2/20 (10.0%)'} | 6.7 | N/A | q09 là case abstain |
+| Multi-hop accuracy | {'count': 20, 'total': 20, 'pct': 100.0, 'display': '20/20 (100.0%)'} | 100.0 | N/A | proxy theo expected source hit |
 | Routing visibility | ✗ Không có | ✓ Có route_reason | N/A | |
-| Debug time (estimate) | N/A | 5-10 phút | N/A | đọc trace thay vì lần mò toàn pipeline |
+| Debug time (estimate) | 30 | 5-10 phút | N/A | đọc trace thay vì lần mò toàn pipeline |
 | Routing accuracy | N/A | 100.0 | N/A | so với `expected_route` trong test set |
 
 ---
