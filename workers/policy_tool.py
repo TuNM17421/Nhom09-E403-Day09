@@ -18,7 +18,11 @@ Gọi độc lập để test:
 
 import os
 import sys
+import json
 from typing import Optional
+
+from dotenv import load_dotenv
+load_dotenv()
 
 WORKER_NAME = "policy_tool_worker"
 
@@ -78,57 +82,57 @@ def analyze_policy(task: str, chunks: list) -> dict:
         dict with: policy_applies, policy_name, exceptions_found, source, rule, explanation
     """
     task_lower = task.lower()
-    context_text = " ".join([c.get("text", "") for c in chunks]).lower()
+    context_text = " ".join([c.get("text", "") for c in chunks])
 
-    # --- Rule-based exception detection ---
-    exceptions_found = []
-
-    # Exception 1: Flash Sale
-    if "flash sale" in task_lower or "flash sale" in context_text:
-        exceptions_found.append({
-            "type": "flash_sale_exception",
-            "rule": "Đơn hàng Flash Sale không được hoàn tiền (Điều 3, chính sách v4).",
-            "source": "policy_refund_v4.txt",
-        })
-
-    # Exception 2: Digital product
-    if any(kw in task_lower for kw in ["license key", "license", "subscription", "kỹ thuật số"]):
-        exceptions_found.append({
-            "type": "digital_product_exception",
-            "rule": "Sản phẩm kỹ thuật số (license key, subscription) không được hoàn tiền (Điều 3).",
-            "source": "policy_refund_v4.txt",
-        })
-
-    # Exception 3: Activated product
-    if any(kw in task_lower for kw in ["đã kích hoạt", "đã đăng ký", "đã sử dụng"]):
-        exceptions_found.append({
-            "type": "activated_exception",
-            "rule": "Sản phẩm đã kích hoạt hoặc đăng ký tài khoản không được hoàn tiền (Điều 3).",
-            "source": "policy_refund_v4.txt",
-        })
-
-    # Determine policy_applies
-    policy_applies = len(exceptions_found) == 0
-
-    # Determine which policy version applies (temporal scoping)
-    # TODO: Check nếu đơn hàng trước 01/02/2026 → v3 applies (không có docs, nên flag cho synthesis)
-    policy_name = "refund_policy_v4"
-    policy_version_note = ""
-    if "31/01" in task_lower or "30/01" in task_lower or "trước 01/02" in task_lower:
-        policy_version_note = "Đơn hàng đặt trước 01/02/2026 áp dụng chính sách v3 (không có trong tài liệu hiện tại)."
-
-    # TODO Sprint 2: Gọi LLM để phân tích phức tạp hơn
-    # Ví dụ:
-    # from openai import OpenAI
-    # client = OpenAI()
-    # response = client.chat.completions.create(
-    #     model="gpt-4o-mini",
-    #     messages=[
-    #         {"role": "system", "content": "Bạn là policy analyst. Dựa vào context, xác định policy áp dụng và các exceptions."},
-    #         {"role": "user", "content": f"Task: {task}\n\nContext:\n" + "\n".join([c['text'] for c in chunks])}
-    #     ]
-    # )
-    # analysis = response.choices[0].message.content
+    system_prompt = """
+    Bạn là một chuyên gia phân tích chính sách (Policy Analyst).
+    Nhiệm vụ: Dựa vào context (là các tài liệu nội bộ), hãy xác định xem yêu cầu của người dùng có được chấp nhận theo chính sách không, và chỉ ra các ngoại lệ (exceptions) nếu có.
+    Trường hợp sản phẩm kỹ thuật số, Flash Sale, phần mềm đã kích hoạt thì thường không được hoàn tiền. Nếu đơn hàng trước 01/02/2026 áp dụng chính sách v3 (nếu không rõ trong docs cứ note lại).
+    
+    Phản hồi BẮT BUỘC theo định dạng JSON với các khóa sau:
+    {
+      "policy_applies": boolean (True nếu được phép, False nếu bị chặn),
+      "policy_name": "tên chính sách áp dụng (vd: refund_policy_v4)",
+      "exceptions_found": [
+         {
+            "type": "loại ngoại lệ (vd: flash_sale_exception, digital_product_exception)",
+            "rule": "câu giải thích luật cụ thể",
+            "source": "tên file nguồn"
+         }
+      ],
+      "policy_version_note": "ghi chú về version nếu cần",
+      "explanation": "bước suy luận ngắn gọn"
+    }
+    """
+    
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={ "type": "json_object" },
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Task: {task}\n\nContext:\n{context_text}"}
+            ],
+            temperature=0.1
+        )
+        analysis_json = json.loads(response.choices[0].message.content)
+        
+        policy_applies = analysis_json.get("policy_applies", False)
+        policy_name = analysis_json.get("policy_name", "unknown")
+        exceptions_found = analysis_json.get("exceptions_found", [])
+        policy_version_note = analysis_json.get("policy_version_note", "")
+        explanation = analysis_json.get("explanation", "")
+        
+    except Exception as e:
+        print(f"⚠️  LLM Policy Analysis failed: {e}")
+        # Fallback to defaults
+        policy_applies = False
+        policy_name = "error_fallback"
+        exceptions_found = [{"type": "error", "rule": f"LLM error: {e}", "source": "system"}]
+        policy_version_note = ""
+        explanation = "Error analyzing policy."
 
     sources = list({c.get("source", "unknown") for c in chunks if c})
 
@@ -138,7 +142,7 @@ def analyze_policy(task: str, chunks: list) -> dict:
         "exceptions_found": exceptions_found,
         "source": sources,
         "policy_version_note": policy_version_note,
-        "explanation": "Analyzed via rule-based policy check. TODO: upgrade to LLM-based analysis.",
+        "explanation": explanation,
     }
 
 
@@ -248,7 +252,7 @@ if __name__ == "__main__":
     ]
 
     for tc in test_cases:
-        print(f"\n▶ Task: {tc['task'][:70]}...")
+        print(f"\n> Task: {tc['task'][:70]}...")
         result = run(tc.copy())
         pr = result.get("policy_result", {})
         print(f"  policy_applies: {pr.get('policy_applies')}")
@@ -257,4 +261,4 @@ if __name__ == "__main__":
                 print(f"  exception: {ex['type']} — {ex['rule'][:60]}...")
         print(f"  MCP calls: {len(result.get('mcp_tools_used', []))}")
 
-    print("\n✅ policy_tool_worker test done.")
+    print("\n[OK] policy_tool_worker test done.")

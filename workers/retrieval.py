@@ -18,6 +18,9 @@ Gọi độc lập để test:
 import os
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # ─────────────────────────────────────────────
 # Worker Contract (xem contracts/worker_contracts.yaml)
 # Input:  {"task": str, "top_k": int = 3}
@@ -30,20 +33,8 @@ DEFAULT_TOP_K = 3
 
 def _get_embedding_fn():
     """
-    Trả về embedding function.
-    TODO Sprint 1: Implement dùng OpenAI hoặc Sentence Transformers.
+    Trả về embedding function sử dụng OpenAI.
     """
-    # Option A: Sentence Transformers (offline, không cần API key)
-    try:
-        from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        def embed(text: str) -> list:
-            return model.encode([text])[0].tolist()
-        return embed
-    except ImportError:
-        pass
-
-    # Option B: OpenAI (cần API key)
     try:
         from openai import OpenAI
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -52,14 +43,11 @@ def _get_embedding_fn():
             return resp.data[0].embedding
         return embed
     except ImportError:
-        pass
-
-    # Fallback: random embeddings cho test (KHÔNG dùng production)
-    import random
-    def embed(text: str) -> list:
-        return [random.random() for _ in range(384)]
-    print("⚠️  WARNING: Using random embeddings (test only). Install sentence-transformers.")
-    return embed
+        print("⚠️  WARNING: Using fallback embeddings due to missing openai package.")
+        import random
+        def embed(text: str) -> list:
+            return [random.random() for _ in range(1536)]
+        return embed
 
 
 def _get_collection():
@@ -195,7 +183,7 @@ if __name__ == "__main__":
     ]
 
     for query in test_queries:
-        print(f"\n▶ Query: {query}")
+        print(f"\n> Query: {query}")
         result = run({"task": query})
         chunks = result.get("retrieved_chunks", [])
         print(f"  Retrieved: {len(chunks)} chunks")
@@ -203,4 +191,4 @@ if __name__ == "__main__":
             print(f"    [{c['score']:.3f}] {c['source']}: {c['text'][:80]}...")
         print(f"  Sources: {result.get('retrieved_sources', [])}")
 
-    print("\n✅ retrieval_worker test done.")
+    print("\n[OK] retrieval_worker test done.")

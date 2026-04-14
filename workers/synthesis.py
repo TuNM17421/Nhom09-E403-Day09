@@ -18,6 +18,9 @@ Gọi độc lập để test:
 
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 WORKER_NAME = "synthesis_worker"
 
 SYSTEM_PROMPT = """Bạn là trợ lý IT Helpdesk nội bộ.
@@ -243,4 +246,4 @@ if __name__ == "__main__":
     print(f"\nAnswer:\n{result2['final_answer']}")
     print(f"Confidence: {result2['confidence']}")
 
-    print("\n✅ synthesis_worker test done.")
+    print("\n[OK] synthesis_worker test done.")
