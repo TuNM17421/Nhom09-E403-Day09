@@ -13,6 +13,9 @@ import json
 import os
 from datetime import datetime
 from typing import TypedDict, Literal, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Uncomment nếu dùng LangGraph:
 # from langgraph.graph import StateGraph, END
@@ -89,36 +92,47 @@ def supervisor_node(state: AgentState) -> AgentState:
     task = state["task"].lower()
     state["history"].append(f"[supervisor] received task: {state['task'][:80]}")
 
-    # --- TODO: Implement routing logic ---
-    # Gợi ý:
-    # - "hoàn tiền", "refund", "flash sale", "license" → policy_tool_worker
-    # - "cấp quyền", "access level", "level 3", "emergency" → policy_tool_worker
-    # - "P1", "escalation", "sla", "ticket" → retrieval_worker
-    # - mã lỗi không rõ (ERR-XXX), không đủ context → human_review
-    # - còn lại → retrieval_worker
-
-    route = "retrieval_worker"         # TODO: thay bằng logic thực
-    route_reason = "default route"    # TODO: thay bằng lý do thực
+    # Routing logic dựa vào task keywords
+    route = "retrieval_worker"
+    route_reason = "general knowledge query → default retrieval"
     needs_tool = False
     risk_high = False
 
-    # Ví dụ routing cơ bản — nhóm phát triển thêm:
-    policy_keywords = ["hoàn tiền", "refund", "flash sale", "license", "cấp quyền", "access", "level 3"]
-    risk_keywords = ["emergency", "khẩn cấp", "2am", "không rõ", "err-"]
+    # Keywords cho policy/access → policy_tool_worker (cần MCP tools)
+    # Chỉ route sang policy khi task liên quan đến kiểm tra/áp dụng chính sách,
+    # không phải khi chỉ hỏi thông tin chung
+    policy_keywords = [
+        "flash sale", "license", "store credit", "tín dụng",
+        "cấp quyền", "access", "level 3", "level 2", "level 4",
+        "quyền", "truy cập", "permission", "admin access",
+        "ngoại lệ", "exception", "kích hoạt",
+    ]
+    # "hoàn tiền"/"refund" chỉ route sang policy khi có context cần check policy
+    # (ví dụ: "được không", "có được", "có thể", "lỗi", "yêu cầu hoàn tiền")
+    refund_policy_patterns = [
+        "được không", "có được không", "có thể hoàn", "yêu cầu hoàn tiền vì",
+        "xin hoàn", "không được hoàn",
+    ]
+    risk_keywords = ["emergency", "khẩn cấp", "2am", "không rõ", "urgent"]
 
-    if any(kw in task for kw in policy_keywords):
+    # Tìm keyword match để tạo route_reason cụ thể
+    matched_policy_kw = [kw for kw in policy_keywords if kw in task]
+    matched_risk_kw = [kw for kw in risk_keywords if kw in task]
+
+    # Check refund policy patterns
+    has_refund_keyword = "hoàn tiền" in task or "refund" in task
+    has_refund_policy_context = any(p in task for p in refund_policy_patterns)
+    if has_refund_keyword and has_refund_policy_context:
+        matched_policy_kw.append("hoàn tiền + policy context")
+
+    if matched_policy_kw:
         route = "policy_tool_worker"
-        route_reason = f"task contains policy/access keyword"
+        route_reason = f"task contains policy/access keyword: {matched_policy_kw[0]}"
         needs_tool = True
 
-    if any(kw in task for kw in risk_keywords):
+    if matched_risk_kw:
         risk_high = True
-        route_reason += " | risk_high flagged"
-
-    # Human review override
-    if risk_high and "err-" in task:
-        route = "human_review"
-        route_reason = "unknown error code + risk_high → human review"
+        route_reason += f" | risk_high flagged (keyword: {matched_risk_kw[0]})"
 
     state["supervisor_route"] = route
     state["route_reason"] = route_reason

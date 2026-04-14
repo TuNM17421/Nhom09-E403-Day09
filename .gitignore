@@ -1,21 +1,26 @@
+# Environment
 .env
-.venv/
-venv/
-env/
 
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
+# ChromaDB
 chroma_db/
 
+# Artifacts (generated)
+artifacts/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+
+# IDE
 .vscode/
 .idea/
-
-Thumbs.db
-.DS_Store
+*.swp
+*.swo
