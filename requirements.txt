@@ -12,7 +12,7 @@ chromadb>=0.4.22
 # (da co trong openai package)
 
 # Option B: Sentence Transformers (local, khong can API key)
-# sentence-transformers>=2.6.0     # Model: paraphrase-multilingual-MiniLM-L12-v2
+sentence-transformers>=2.6.0     # Model: paraphrase-multilingual-MiniLM-L12-v2
 
 # ─── LLM ────────────────────────────────
 # Option A: OpenAI
