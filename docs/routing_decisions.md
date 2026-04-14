@@ -1,6 +1,6 @@
 # Routing Decisions Log - Lab Day 09
 
-**Nhóm:** ___________  
+**Nhóm:** Nhóm 09    
 **Ngày:** 2026-04-14
 
 > Ghi từ trace thực tế của latest test run.

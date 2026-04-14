@@ -1,6 +1,6 @@
 # Single Agent vs Multi-Agent Comparison - Lab Day 09
 
-**Nhóm:** ___________  
+**Nhóm:** Nhóm 09    
 **Ngày:** 2026-04-14
 
 > Day 09 dùng số liệu thật từ latest test run. Day 08 để `N/A` vì repo hiện tại không chứa baseline.
